@@ -1,0 +1,7 @@
+{
+    "files.associations": {
+        "stddef.h": "c",
+        "inttypes.h": "c",
+        "vma.h": "c"
+    }
+}
