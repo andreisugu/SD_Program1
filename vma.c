@@ -116,6 +116,8 @@ arena_t *alloc_arena(const uint64_t size) {
     // Allocate addres for variables list and adjust initial variables
     ar->arena_size = size;
     ar->alloc_list = calloc(1, sizeof(dll_list_t));
+    ar->alloc_list->size = 0;
+    ar->alloc_list->data_size = sizeof(block_t);
     DIE(!(ar->alloc_list), "calloc() for arena alloc_list failed");
     // Returning arena address
     return ar;
@@ -220,7 +222,7 @@ void alloc_block(arena_t *arena, const uint64_t address, const uint64_t size) {
     if(merger_end != NULL) {
         copy = merger_end->miniblock_list;
         nod = copy->head;
-        while(i < (int)merger_end->size) {
+        while(i < (int)copy->size) {
             dll_add_nth_node(minib_l, i, nod->data);
             nod = nod->next;
             i++;
@@ -230,7 +232,7 @@ void alloc_block(arena_t *arena, const uint64_t address, const uint64_t size) {
     if(merger != NULL) {
         copy = merger->miniblock_list;
         nod = copy->head;
-        while(j < (int)merger->size) {
+        while(j < (int)copy->size) {
             dll_add_nth_node(minib_l, i + j, nod->data);
             nod = nod->next;
             j++;
@@ -238,6 +240,7 @@ void alloc_block(arena_t *arena, const uint64_t address, const uint64_t size) {
     }
     // Eliminam noduri , dealocam blocuri si introducem noul nod in lista de blocuri
     dll_node_t *f_node = calloc(1, sizeof(dll_node_t));
+    f_node->data = bl;
     if(merger_end != NULL) {
         // EROARE POSIBILA: MINIBLOCK_LIST ALOCARE SI DEALOCARE
         free(merger_end->miniblock_list);
@@ -245,6 +248,8 @@ void alloc_block(arena_t *arena, const uint64_t address, const uint64_t size) {
         f_node->prev = merger_end_node->prev;
         f_node->next = merger_end_node->next;
         free(merger_end_node);
+        arena->alloc_list->size--;
+        
     }
     if(merger != NULL) {
         free(merger->miniblock_list);
@@ -253,23 +258,39 @@ void alloc_block(arena_t *arena, const uint64_t address, const uint64_t size) {
             f_node = merger_node->prev;
         f_node->next = merger_node->next;
         free(merger_node);
+        arena->alloc_list->size--;
+    }
+    // If this is the first block, we make it point to itself
+    if(arena->alloc_list->size == 0) {
+        f_node->prev = f_node;
+        f_node->next = f_node;
+        arena->alloc_list->head = f_node;
+        arena->alloc_list->size = 1;
+        return;
     }
     // If we didn't merge, we treat separately
     if(f_node->prev == NULL) {
-        f_node->prev = first_favor;
+        if(first_favor != NULL)
+            f_node->prev = first_favor;
+        else
+            f_node->prev = arena->alloc_list->head;
     }
     if(f_node->next == NULL) {
-        f_node->next = last_favor;
+        if(last_favor != NULL)
+            f_node->next = last_favor;
+        else
+            f_node->next = arena->alloc_list->head;
     }
     // We adjust the next and prev nodes
     f_node->prev->next = f_node;
     f_node->next->prev = f_node;
+    arena->alloc_list->size++;
 }
 
 //void free_block(arena_t *arena, const uint64_t address);
 
 void pmap(const arena_t *arena) {
-    printf("Total memory: % bytes\n", SCNu64, arena->arena_size);
+    printf("Total memory: %u bytes\n", (unsigned int)arena->arena_size);
     // Total arena free memory, blocks, miniblocks
     int miniblocks = 0;
     uint64_t left = arena->arena_size;
@@ -285,16 +306,16 @@ void pmap(const arena_t *arena) {
         // Going to the next block
         nod = nod->next;
     }
-    printf("Free memory: % bytes\n", SCNu64, left);
+    printf("Free memory: %u bytes\n", (unsigned int)left);
     printf("Number of allocated blocks: %d\n", arena->alloc_list->size);
     printf("Number of allocated miniblocks: %d\n", miniblocks);
     // Blocks statistics
     nod = arena->alloc_list->head;
     for(int i = 0; i < arena->alloc_list->size; i++) {
         block_t *block = nod->data;
-        printf("Block %d begin\n", i);
-        printf("Zone: % - ", SCNu64, block->start_address);
-        printf("%\n", SCNu64, block->start_address + block->size);
+        printf("\nBlock %d begin\n", i);
+        printf("Zone: %u - ", (unsigned int)block->start_address);
+        printf("%u\n", (unsigned int)block->start_address + block->size);
         //TODO: Miniblocks
         printf("Block %d end\n", i);
         nod = nod->next;
