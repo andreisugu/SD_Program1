@@ -175,13 +175,8 @@ void alloc_block(arena_t *arena, const uint64_t address, const uint64_t size) {
         adr = bl->start_address;
         adr_end = adr + bl->size;
         // Verificam daca adresa noului nostru bloc intersecteaza blocul acesta
-        if(address >= adr && address < adr_end) {
+        if(!((address_end <= adr) || (address >= adr_end))) {
             // daca address == adr_end, atunci dau merge cat timp nu se intersecteaza cu nimic
-            printf("This zone was already allocated.\n");
-            return;
-        }
-        if(address_end <= adr_end && address_end > adr) {
-            // daca address_end == adr, atunci dau merge cat timp nu se intersecteaza cu nimic
             printf("This zone was already allocated.\n");
             return;
         }
@@ -194,10 +189,10 @@ void alloc_block(arena_t *arena, const uint64_t address, const uint64_t size) {
             merger = bl;
             merger_node = nod;
         }
-        if(last_favor == NULL && address >= adr_end) {
+        if(address >= adr_end) {
             last_favor = nod;
         }
-        if(first_favor == NULL && address_end <= adr) {
+        if(address_end <= adr && first_favor == NULL) {
             first_favor = nod;
         }
         // We continue onto the next block
@@ -242,20 +237,22 @@ void alloc_block(arena_t *arena, const uint64_t address, const uint64_t size) {
     dll_node_t *f_node = calloc(1, sizeof(dll_node_t));
     f_node->data = bl;
     if(merger_end != NULL) {
-        // EROARE POSIBILA: MINIBLOCK_LIST ALOCARE SI DEALOCARE
+        if(merger_end_node == arena->alloc_list->head)
+            arena->alloc_list->head = f_node;
         free(merger_end->miniblock_list);
         free(merger_end_node->data);
         f_node->prev = merger_end_node->prev;
         f_node->next = merger_end_node->next;
         free(merger_end_node);
         arena->alloc_list->size--;
-        
     }
     if(merger != NULL) {
+        if(merger_node == arena->alloc_list->head)
+            arena->alloc_list->head = f_node;
         free(merger->miniblock_list);
         free(merger_node->data);
         if(f_node->prev == NULL)
-            f_node = merger_node->prev;
+            f_node->prev = merger_node->prev;
         f_node->next = merger_node->next;
         free(merger_node);
         arena->alloc_list->size--;
@@ -270,14 +267,17 @@ void alloc_block(arena_t *arena, const uint64_t address, const uint64_t size) {
     }
     // If we didn't merge, we treat separately
     if(f_node->prev == NULL) {
-        if(first_favor != NULL)
-            f_node->prev = first_favor;
+        if(last_favor != NULL)
+            f_node->prev = last_favor;
         else
-            f_node->prev = arena->alloc_list->head;
+            f_node->prev = arena->alloc_list->head->prev;
     }
     if(f_node->next == NULL) {
-        if(last_favor != NULL)
-            f_node->next = last_favor;
+        if(first_favor != NULL) {
+            f_node->next = first_favor;
+            if(first_favor == arena->alloc_list->head)
+                arena->alloc_list->head = f_node;
+        }
         else
             f_node->next = arena->alloc_list->head;
     }
