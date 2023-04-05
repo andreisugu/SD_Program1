@@ -124,12 +124,12 @@ void dealloc_arena(arena_t *arena)
 		dll_node_t *block_node = dll_remove_nth_node(arena->alloc_list, 0);
 		// We free the block's miniblocks
 		block_t *block = block_node->data;
-		dll_list_t * minilist = block->miniblock_list;
-		while(minilist->size > 0) {
+		dll_list_t *minilist = block->miniblock_list;
+		while (minilist->size > 0) {
 			dll_node_t *miniblock_node = dll_remove_nth_node(minilist, 0);
 			// We free the miniblock's data
 			miniblock_t *miniblock = miniblock_node->data;
-			if(miniblock->rw_buffer)
+			if (miniblock->rw_buffer)
 				free(miniblock->rw_buffer);
 			free(miniblock_node->data);
 			free(miniblock_node);
@@ -290,7 +290,8 @@ void alloc_block(arena_t *arena, const uint64_t address, const uint64_t size)
 void free_block(arena_t *arena, const uint64_t address)
 {
 	dll_node_t *b_node = arena->alloc_list->head;
-	for (int i = 0; i < arena->alloc_list->size; i++, b_node = b_node->next) {
+	unsigned int i = 0, j = 0;
+	for (; i < arena->alloc_list->size; i++, b_node = b_node->next) {
 		block_t *block = b_node->data;
 		if (address < block->start_address)
 			continue;
@@ -298,67 +299,74 @@ void free_block(arena_t *arena, const uint64_t address)
 			continue;
 		dll_list_t *mini_list = block->miniblock_list;
 		dll_node_t *m_node = mini_list->head;
-		for (int j = 0; j < mini_list->size; j++, m_node = m_node->next) {
+		for (; j < mini_list->size; j++, m_node = m_node->next) {
 			miniblock_t *minib = m_node->data;
 			if (minib->start_address != address)
 				continue;
-			block->size -= minib->size;
-			int mode = 0; // 1 -> head; 2 -> tail; 0 -> split
-			if (m_node == mini_list->head->prev)
-				mode = 2;
-			if (m_node == mini_list->head)
-				mode = 1;
-			if (minib->rw_buffer)
+			if (minib->rw_buffer) // We remove the miniblocks content
 				free(minib->rw_buffer);
-			free(m_node->data);
+			int pos = 2; // 0 = beggining, 1 = end, 2 = inside
+			if (m_node == mini_list->head)
+				pos = 0;
+			if (m_node == mini_list->head->prev)
+				pos = 1;
+			if (pos == 0) // prev, next of m_node, size mini_list
+				mini_list->head = m_node->next;
 			m_node->prev->next = m_node->next;
-			m_node->next->prev = m_node->next;
-			dll_node_t *next_m = m_node->next;
-			free(m_node);
-			if (mini_list->size == 1) {
-				free(mini_list);
-				free(b_node->data);
-				b_node->prev->next = b_node->next;
+			m_node->next->prev = m_node->prev;
+			mini_list->size--;
+			block->size -= minib->size; // Adjust block size
+			if (mini_list->size == 0) {
+				if (arena->alloc_list->head == b_node)
+					arena->alloc_list->head = b_node->next;
+				free(m_node); // We free the miniblock node
+				free(minib); // We free the miniblock
+				free(mini_list); // We free the miniblock list
+				free(b_node->data); // We free the block
 				b_node->next->prev = b_node->prev;
-				free(b_node);
+				b_node->prev->next = b_node->next;
+				free(b_node); // We free the block node
 				arena->alloc_list->size--;
 				return;
 			}
-			if (mode == 1) {
-				mini_list->head = next_m;
-				mini_list->size--;
-				miniblock_t *tmp_mini = mini_list->head->data;
-				block->start_address = tmp_mini->start_address;
+			if (pos == 0) {
+				miniblock_t *new_minib = mini_list->head->data;
+				block->start_address = new_minib->start_address;
+				free(m_node); // We free the miniblock node
+				free(minib); // We free the miniblock
 				return;
 			}
-			if (mode == 2) {
-				mini_list->size--;
+			if (pos == 1) {
+				free(m_node); // We free the miniblock node
+				free(minib); // We free the miniblock
 				return;
 			}
-			dll_list_t *newl_miniblock = dll_create(sizeof(miniblock_t));
-			int k = j;
-			// Transfer right side miniblocks to new list
-			size_t tmp_size = 0;
-			while (j < mini_list->size) {
-				dll_node_t *transfer = dll_remove_nth_node(mini_list, j);
-				dll_add_nth_node(newl_miniblock, j - k, transfer->data);
-				miniblock_t *temp_var = transfer->data;
-				tmp_size += temp_var->size;
+			miniblock_t *start_miniblock = mini_list->head->data;
+			block_t *new_block = malloc(sizeof(block_t));
+			new_block->start_address = start_miniblock->start_address;
+			new_block->size = 0;
+			new_block->miniblock_list = malloc(sizeof(dll_list_t));
+			dll_list_t *newl_mini = new_block->miniblock_list;
+			newl_mini->head = NULL;
+			newl_mini->size = 0;
+			newl_mini->data_size = sizeof(miniblock_t);
+			while (mini_list->head != m_node->next) {
+				dll_node_t *transfer = dll_remove_nth_node(mini_list, 0);
+				dll_add_nth_node(newl_mini, newl_mini->size, transfer->data);
+				block->size -= ((miniblock_t *)transfer->data)->size;
+				new_block->size += ((miniblock_t *)transfer->data)->size;
 				free(transfer->data);
 				free(transfer);
-				j++;
-			}
-			mini_list->size = j - k;
-			// Create new block and insert miniblock list
-			block_t *new_block = calloc(1, sizeof(block_t));
-			new_block->miniblock_list = newl_miniblock;
-			miniblock_t *temp_mini = newl_miniblock->head->data;
-			new_block->start_address = temp_mini->start_address;
-			// Adjusting size for both blocks
-			block->size -= tmp_size;
-			new_block->size = tmp_size;
-			// Create and insert new block node in arena
-			dll_add_nth_node(arena->alloc_list, i + 1, new_block);
+			} // We add the new block to the list
+			dll_node_t *new_block_node = malloc(sizeof(dll_node_t));
+			new_block_node->data = new_block;
+			new_block_node->next = b_node;
+			new_block_node->prev = b_node->prev;
+			b_node->prev = new_block_node;
+			new_block_node->prev->next = new_block_node;
+			arena->alloc_list->size++;
+			free(m_node); // We free the miniblock node
+			free(minib); // We free the miniblock;
 			return;
 		}
 		break;
@@ -368,7 +376,7 @@ void free_block(arena_t *arena, const uint64_t address)
 
 void pmap(const arena_t *arena)
 {
-	printf("Total memory: 0x%X bytes\n", (unsigned int)arena->arena_size);
+	printf("Total memory: 0x%lX bytes\n", arena->arena_size);
 	// Total arena free memory, blocks, miniblocks
 	int miniblocks = 0;
 	uint64_t left = arena->arena_size;
@@ -384,7 +392,7 @@ void pmap(const arena_t *arena)
 		// Going to the next block
 		nod = nod->next;
 	}
-	printf("Free memory: 0x%X bytes\n", (unsigned int)left);
+	printf("Free memory: 0x%lX bytes\n", left);
 	printf("Number of allocated blocks: %d\n", arena->alloc_list->size);
 	printf("Number of allocated miniblocks: %d\n", miniblocks);
 	// Blocks statistics
@@ -392,8 +400,8 @@ void pmap(const arena_t *arena)
 	for (unsigned int i = 0; i < arena->alloc_list->size; i++) {
 		block_t *block = nod->data;
 		printf("\nBlock %d begin\n", i + 1);
-		printf("Zone: 0x%X - ", (unsigned int)block->start_address);
-		printf("0x%X\n", (unsigned int)block->start_address + block->size);
+		printf("Zone: 0x%lX - ", block->start_address);
+		printf("0x%lX\n", block->start_address + block->size);
 		// Miniblocks
 		dll_list_t *mini_list = block->miniblock_list;
 		dll_node_t *mini_node = mini_list->head;
@@ -401,9 +409,9 @@ void pmap(const arena_t *arena)
 			miniblock_t *data_mini = mini_node->data;
 			printf("Miniblock %d:", j + 1);
 			printf("		");
-			printf("0x%llX", data_mini->start_address);
+			printf("0x%lX", data_mini->start_address);
 			printf("		-		");
-			printf("0x%llX		", data_mini->start_address + data_mini->size);
+			printf("0x%lX		", data_mini->start_address + data_mini->size);
 			if (data_mini->perm == 0)
 				printf("| RW-\n");
 			else

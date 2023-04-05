@@ -10,9 +10,9 @@ int main(void)
 		fgets(comanda, MAX_STR, stdin);
 		char *tok = strtok(comanda, delim);
 		if (strncmp(tok, "ALLOC_ARENA", 11) == 0) {
-			unsigned int dim_arena = 0;
+			uint64_t dim_arena = 0;
 			tok = strtok(NULL, delim);
-			dim_arena = strtol(tok, NULL, 10);
+			dim_arena = (uint64_t)strtol(tok, NULL, 10);
 			// STRTOK CHECK
 			tok = strtok(NULL, delim);
 			if (tok) {
@@ -20,7 +20,7 @@ int main(void)
 				break;
 			}
 			if (!arena_main)
-				arena_main = alloc_arena((uint64_t)dim_arena);
+				arena_main = alloc_arena(dim_arena);
 			else
 				printf("Invalid command. Please try again.");
 			continue;
@@ -38,11 +38,11 @@ int main(void)
 			continue;
 		}
 		if (strncmp(tok, "ALLOC_BLOCK", 12) == 0) {
-			unsigned int adresa, marime;
+			uint64_t adresa, marime;
 			tok = strtok(NULL, delim);
-			adresa = strtol(tok, NULL, 10);
+			adresa = (uint64_t)strtol(tok, NULL, 10);
 			tok = strtok(NULL, delim);
-			marime = strtol(tok, NULL, 10);
+			marime = (uint64_t)strtol(tok, NULL, 10);
 			// STRTOK CHECK
 			tok = strtok(NULL, delim);
 			if (tok) {
@@ -50,7 +50,7 @@ int main(void)
 				break;
 			}
 			if (arena_main)
-				alloc_block(arena_main, (uint64_t)adresa, (uint64_t)marime);
+				alloc_block(arena_main, adresa, marime);
 			else
 				printf("Invalid command. Please try again.");
 			continue;
@@ -71,11 +71,11 @@ int main(void)
 			continue;
 		}
 		if (strncmp(tok, "READ", 4) == 0) {
-			int adresa, marime;
+			uint64_t adresa, marime;
 			tok = strtok(NULL, delim);
-			adresa = strtol(tok, NULL, 10);
+			adresa = (uint64_t)strtol(tok, NULL, 10);
 			tok = strtok(NULL, delim);
-			marime = strtol(tok, NULL, 10);
+			marime = (uint64_t)strtol(tok, NULL, 10);
 			// STRTOK CHECK
 			tok = strtok(NULL, delim);
 			if (tok) {
@@ -90,26 +90,25 @@ int main(void)
 		}
 		if (strncmp(tok, "WRITE", 5) == 0) {
 			uint64_t adresa, marime;
-			char *data;
+			int8_t *data;
 			tok = strtok(NULL, delim);
 			adresa = (uint64_t)strtol(tok, NULL, 10);
 			tok = strtok(NULL, delim);
 			marime = (uint64_t)strtol(tok, NULL, 10);
 			tok = strtok(NULL, delim);
-			data = calloc(strlen(tok) + 1, sizeof(char));
-			strcpy(data, tok);
+			data = calloc(strlen(tok) + 1, sizeof(int8_t));
+			strcpy((char *)data, tok);
 			tok = strtok(NULL, delim);
 			// STRTOK CHECK
 			if (tok) {
 				free(data);
 				errorer(4, tok, delim);
 			} else {
-				strcpy(data, tok);
 				if (!arena_main) {
 					printf("Invalid command. Please try again.");
 					continue;
 				}
-				write(arena_main, adresa, marime, (uint8_t *)data);
+				write(arena_main, adresa, marime, data);
 			}
 			continue;
 		}

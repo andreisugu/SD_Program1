@@ -1,5 +1,5 @@
 CC=gcc
-CFLAGS= -m32 -g -lm -std=c99
+CFLAGS= -Wall -Wextra -std=c99
 
 TARGETS = main
 
