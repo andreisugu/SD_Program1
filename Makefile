@@ -1,4 +1,4 @@
-CFLAGS = -fno-PIC -m32 -g -std=c99 -lm
+CFLAGS = -fno-PIC -m32 -g -std=c99
 LDFLAGS = -no-pie -m32
 
 .DEFAULT_GOAL: all
@@ -8,7 +8,7 @@ LDFLAGS = -no-pie -m32
 all: main
 
 main: main.o vma.o
-	$(CC) $(LDFLAGS) -o $@ $^
+	$(CC) $(LDFLAGS) -o $@ $^ -lm
 
 main.o: main.c vma.h
 

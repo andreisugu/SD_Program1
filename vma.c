@@ -290,7 +290,7 @@ void alloc_block(arena_t *arena, const uint64_t address, const uint64_t size) {
 //void free_block(arena_t *arena, const uint64_t address);
 
 void pmap(const arena_t *arena) {
-    printf("Total memory: %u bytes\n", (unsigned int)arena->arena_size);
+    printf("Total memory: 0x%X bytes\n", (unsigned int)arena->arena_size);
     // Total arena free memory, blocks, miniblocks
     int miniblocks = 0;
     uint64_t left = arena->arena_size;
@@ -306,7 +306,7 @@ void pmap(const arena_t *arena) {
         // Going to the next block
         nod = nod->next;
     }
-    printf("Free memory: %u bytes\n", (unsigned int)left);
+    printf("Free memory: 0x%X bytes\n", (unsigned int)left);
     printf("Number of allocated blocks: %d\n", arena->alloc_list->size);
     printf("Number of allocated miniblocks: %d\n", miniblocks);
     // Blocks statistics
@@ -314,8 +314,8 @@ void pmap(const arena_t *arena) {
     for(int i = 0; i < arena->alloc_list->size; i++) {
         block_t *block = nod->data;
         printf("\nBlock %d begin\n", i);
-        printf("Zone: %u - ", (unsigned int)block->start_address);
-        printf("%u\n", (unsigned int)block->start_address + block->size);
+        printf("Zone: 0x%X - ", (unsigned int)block->start_address);
+        printf("0x%X\n", (unsigned int)block->start_address + block->size);
         //TODO: Miniblocks
         printf("Block %d end\n", i);
         nod = nod->next;
