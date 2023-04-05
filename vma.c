@@ -57,16 +57,11 @@ dll_add_nth_node(dll_list_t *list, unsigned int n, const void *new_data)
 			list->head = nod;
 			nod->next->prev = nod;
 			nod->prev->next = nod;
-		} else if (n == list->size) {
-			nod->next = list->head;
-			nod->prev = dll_get_nth_node(list, list->size - 1);
-			nod->prev->next = nod;
-			nod->next->prev = nod;
 		} else {
 			// Usual case
 			nod->prev = dll_get_nth_node(list, n - 1);
 			nod->next = nod->prev->next;
-			  nod->prev->next = nod;
+			nod->prev->next = nod;
 			nod->next->prev = nod;
 		}
 	}
@@ -124,33 +119,26 @@ arena_t *alloc_arena(const uint64_t size)
 
 void dealloc_arena(arena_t *arena)
 {
-	// alloc  alloc  alloc  alloc             alloc
-	// Arena->list->blocks->list->miniblocks->list->miniblock
-	// We go trough all the blocks inside the arena
-	dll_list_t *blocks_list = arena->alloc_list;
-	dll_node_t *block_node = blocks_list->head;
-	while (blocks_list->size > 0) {
-		// We free the block inside the node
+	// We free the list of blocks
+	while (arena->alloc_list->size > 0) {
+		dll_node_t *block_node = dll_remove_nth_node(arena->alloc_list, 0);
+		// We free the block's miniblocks
 		block_t *block = block_node->data;
-		// We go trough all the miniblocks inside the block
-		dll_list_t *miniblocks = block->miniblock_list;
-		dll_node_t *miniblock_node = miniblocks->head;
-		while (miniblocks->size > 0) {
+		dll_list_t * minilist = block->miniblock_list;
+		while(minilist->size > 0) {
+			dll_node_t *miniblock_node = dll_remove_nth_node(minilist, 0);
+			// We free the miniblock's data
 			miniblock_t *miniblock = miniblock_node->data;
-			if (miniblock->rw_buffer)
+			if(miniblock->rw_buffer)
 				free(miniblock->rw_buffer);
 			free(miniblock_node->data);
-			miniblocks->size--;
-			miniblock_node = miniblock_node->next;
-			free(miniblock_node->prev);
+			free(miniblock_node);
 		}
-		free(miniblocks);
-		free(block);
-		blocks_list->size--;
-		block_node = block_node->next;
-		free(block_node->prev);
+		free(minilist);
+		free(block_node->data);
+		free(block_node);
 	}
-	free(blocks_list);
+	free(arena->alloc_list);
 	free(arena);
 }
 
@@ -198,28 +186,30 @@ void alloc_block(arena_t *arena, const uint64_t address, const uint64_t size)
 		// We continue onto the next block
 		nod = nod->next;
 	}
-	// Alocarea blocului si merge-uri
+	// Block Allocation and merging
 	block_t *bl = calloc(1, sizeof(block_t));
 	bl->start_address = address;
 	bl->size = size;
-	// Merge la capatul stanga al blocului
+	// Merging to the left side of the block
 	if (merger_end) {
 		bl->size = bl->size + merger_end->size;
 		bl->start_address = merger_end->start_address;
 	}
+	// Merging to the right side of the block
 	if (merger)
 		bl->size = bl->size + merger->size;
 	// Merging la listele de miniblocuri
 	// The left side
 	bl->miniblock_list = dll_create(sizeof(miniblock_t));
-	dll_list_t *minib_l = bl->miniblock_list, *copy;
+	dll_list_t *minib_l = bl->miniblock_list, *merged_list;
 	int i = 0;
 	if (merger_end) {
-		copy = merger_end->miniblock_list;
-		nod = copy->head;
-		while (i < (int)copy->size) {
-			dll_add_nth_node(minib_l, i, nod->data);
-			nod = nod->next;
+		merged_list = merger_end->miniblock_list;
+		while ((int)merged_list->size > 0) {
+			dll_node_t *miniblock_node = dll_remove_nth_node(merged_list, 0);
+			dll_add_nth_node(minib_l, i, miniblock_node->data);
+			free(miniblock_node->data);
+			free(miniblock_node);
 			i++;
 		}
 	}
@@ -228,17 +218,18 @@ void alloc_block(arena_t *arena, const uint64_t address, const uint64_t size)
 	minitmp->start_address = address;
 	minitmp->size = size;
 	minitmp->perm = 0; // 0 = RW-
-	dll_add_nth_node(minib_l, i, (void *)minitmp);
+	dll_add_nth_node(minib_l, i, minitmp);
 	free(minitmp);
 	i++;
 	//The right side
 	int j = 0;
 	if (merger) {
-		copy = merger->miniblock_list;
-		nod = copy->head;
-		while (j < (int)copy->size) {
-			dll_add_nth_node(minib_l, i + j, nod->data);
-			nod = nod->next;
+		merged_list = merger->miniblock_list;
+		while (merged_list->size > 0) {
+			dll_node_t *miniblock_node = dll_remove_nth_node(merged_list, 0);
+			dll_add_nth_node(minib_l, i + j, miniblock_node->data);
+			free(miniblock_node->data);
+			free(miniblock_node);
 			j++;
 		}
 	}
@@ -298,7 +289,81 @@ void alloc_block(arena_t *arena, const uint64_t address, const uint64_t size)
 
 void free_block(arena_t *arena, const uint64_t address)
 {
-	return;
+	dll_node_t *b_node = arena->alloc_list->head;
+	for (int i = 0; i < arena->alloc_list->size; i++, b_node = b_node->next) {
+		block_t *block = b_node->data;
+		if (address < block->start_address)
+			continue;
+		if (address > block->start_address + block->size)
+			continue;
+		dll_list_t *mini_list = block->miniblock_list;
+		dll_node_t *m_node = mini_list->head;
+		for (int j = 0; j < mini_list->size; j++, m_node = m_node->next) {
+			miniblock_t *minib = m_node->data;
+			if (minib->start_address != address)
+				continue;
+			block->size -= minib->size;
+			int mode = 0; // 1 -> head; 2 -> tail; 0 -> split
+			if (m_node == mini_list->head->prev)
+				mode = 2;
+			if (m_node == mini_list->head)
+				mode = 1;
+			if (minib->rw_buffer)
+				free(minib->rw_buffer);
+			free(m_node->data);
+			m_node->prev->next = m_node->next;
+			m_node->next->prev = m_node->next;
+			dll_node_t *next_m = m_node->next;
+			free(m_node);
+			if (mini_list->size == 1) {
+				free(mini_list);
+				free(b_node->data);
+				b_node->prev->next = b_node->next;
+				b_node->next->prev = b_node->prev;
+				free(b_node);
+				arena->alloc_list->size--;
+				return;
+			}
+			if (mode == 1) {
+				mini_list->head = next_m;
+				mini_list->size--;
+				miniblock_t *tmp_mini = mini_list->head->data;
+				block->start_address = tmp_mini->start_address;
+				return;
+			}
+			if (mode == 2) {
+				mini_list->size--;
+				return;
+			}
+			dll_list_t *newl_miniblock = dll_create(sizeof(miniblock_t));
+			int k = j;
+			// Transfer right side miniblocks to new list
+			size_t tmp_size = 0;
+			while (j < mini_list->size) {
+				dll_node_t *transfer = dll_remove_nth_node(mini_list, j);
+				dll_add_nth_node(newl_miniblock, j - k, transfer->data);
+				miniblock_t *temp_var = transfer->data;
+				tmp_size += temp_var->size;
+				free(transfer->data);
+				free(transfer);
+				j++;
+			}
+			mini_list->size = j - k;
+			// Create new block and insert miniblock list
+			block_t *new_block = calloc(1, sizeof(block_t));
+			new_block->miniblock_list = newl_miniblock;
+			miniblock_t *temp_mini = newl_miniblock->head->data;
+			new_block->start_address = temp_mini->start_address;
+			// Adjusting size for both blocks
+			block->size -= tmp_size;
+			new_block->size = tmp_size;
+			// Create and insert new block node in arena
+			dll_add_nth_node(arena->alloc_list, i + 1, new_block);
+			return;
+		}
+		break;
+	}
+	printf("Invalid address for free.\n");
 }
 
 void pmap(const arena_t *arena)
