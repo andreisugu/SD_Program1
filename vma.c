@@ -144,33 +144,36 @@ void dealloc_arena(arena_t *arena)
 
 void alloc_block(arena_t *arena, const uint64_t address, const uint64_t size)
 {
-	// We verify wether or not we can even allocate the block
-	if (address > arena->arena_size) {
-		printf("The allocated address is outside the size of arena\n");
+	// Verify wether or not we can even allocate the block
+	if (address >= arena->arena_size) {
+		if (address > arena->arena_size)
+			printf("The allocated address is outside the size of arena\n");
+		else if (size)
+			printf("The allocated address is outside the size of arena\n");
 		return;
 	}
 	if (address + size > arena->arena_size) {
 		printf("The end address is past the size of the arena\n");
 		return;
 	}
-	// Cautam in lista de blocuri sa vedem daca exista un bloc la adresa primita
+	// We check to see if there is a block already allocated at this address
 	dll_node_t *nod = arena->alloc_list->head;
 	uint64_t address_end = address + size;
 	dll_node_t *merger_node = NULL, *merger_end_node = NULL;
 	dll_node_t *first_favor = NULL, *last_favor = NULL;
 	block_t *merger = NULL, *merger_end = NULL;
 	for (unsigned int i = 0; i < arena->alloc_list->size; i++) {
-		// notam separat extremitatile adreselor blocului
+		// We get the extremities
 		uint64_t adr, adr_end;
 		block_t *bl = (block_t *)nod->data;
 		adr = bl->start_address;
 		adr_end = adr + bl->size;
-		// Verificam daca adresa noului nostru bloc intersecteaza blocul acesta
+		// Check for overlap
 		if (!(address_end <= adr || address >= adr_end)) {
 			printf("This zone was already allocated.\n");
 			return;
 		}
-		// Verificam daca am gasit un bloc potential pentru merging
+		// Check for merging possibilities
 		if (address == adr_end) {
 			merger_end = bl;
 			merger_end_node = nod;
@@ -233,7 +236,7 @@ void alloc_block(arena_t *arena, const uint64_t address, const uint64_t size)
 			j++;
 		}
 	}
-	// Eliminam noduri , dealocam blocuri si introducem noul nod
+	// Node insertion, freeing and removing
 	dll_node_t *f_node = calloc(1, sizeof(dll_node_t));
 	f_node->data = bl;
 	if (merger_end) {
@@ -365,6 +368,9 @@ void free_block(arena_t *arena, const uint64_t address)
 			b_node->prev = new_block_node;
 			new_block_node->prev->next = new_block_node;
 			arena->alloc_list->size++;
+			if (i == 0)
+				arena->alloc_list->head = new_block_node;
+			fix_my_block(block);
 			free(m_node); // We free the miniblock node
 			free(minib); // We free the miniblock;
 			return;
@@ -437,4 +443,18 @@ void errorer(int num, char *tok, const char *delim)
 		tok = strtok(NULL, delim);
 	}
 	sim_errorer(num);
+}
+
+void fix_my_block(block_t *block) {
+	// We want to fix the start and size of this block
+	// We get the first miniblock
+	dll_list_t *mini_list = block->miniblock_list;
+	dll_node_t *mini_node = mini_list->head;
+	miniblock_t *mini = mini_node->data;
+	block->start_address = mini->start_address;
+	// We get the last miniblock
+	mini_node = mini_node->prev;
+	mini = mini_node->data;
+	// We adjust the size of the block
+	block->size = (mini->start_address + mini->size) - block->start_address;
 }

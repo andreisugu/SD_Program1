@@ -74,3 +74,4 @@ void mprotect(arena_t *arena, uint64_t address, int8_t *permission);
 // Extra
 void sim_errorer(int num);
 void errorer(int num, char *tok, const char *delim);
+void fix_my_block(block_t *block);
