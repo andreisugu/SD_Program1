@@ -41,6 +41,7 @@
 *.su
 *.idb
 *.pdb
+*.valgrind
 
 # Kernel Module Compile Results
 *.mod*
@@ -51,3 +52,7 @@ Module.symvers
 Mkfile.old
 dkms.conf
 main
+.check.grade
+build
+vma
+check_utils/__pycache__/grader.cpython-310.pyc

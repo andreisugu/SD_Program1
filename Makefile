@@ -1,19 +1,15 @@
-CFLAGS = -fno-PIC -m32 -g -std=c99
-LDFLAGS = -no-pie -m32
+CC=gcc
+CFLAGS= -m32 -g -lm -std=c99
 
-.DEFAULT_GOAL: all
+TARGETS = main
 
-.PHONY: all clean
+build: $(TARGETS)
 
-all: main
-
-main: main.o vma.o
-	$(CC) $(LDFLAGS) -o $@ $^ -lm
-
-main.o: main.c vma.h
-
-vma.o: vma.c
+main: main.c vma.o vma.h
+	$(CC) $(CFLAGS) -g -o vma vma.o main.c
 
 clean:
-	rm -f *.o main
-	rm vma.o main.o
+	rm -f $(TARGETS)
+	rm -f vma.o
+
+.PHONY: pack clean
