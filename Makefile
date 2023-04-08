@@ -8,6 +8,9 @@ build: $(TARGETS)
 main: main.c vma.o vma.h
 	$(CC) $(CFLAGS) -g -o vma vma.o main.c
 
+run_vma: vma
+	./vma
+
 clean:
 	rm -f $(TARGETS)
 	rm -f vma.o
