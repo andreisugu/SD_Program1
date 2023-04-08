@@ -96,6 +96,7 @@ int main(void)
 			marime = (uint64_t)strtol(tok, NULL, 10);
 			tok = strtok(NULL, "\n");
 			data = calloc(MAX_STR, sizeof(int8_t));
+			DIE(!data, "calloc() for data failed");
 			if (tok)
 				strcpy((char *)data, tok);
 			while (strlen((char *)data) < marime - 1) {

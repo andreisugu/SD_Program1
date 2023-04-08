@@ -190,6 +190,7 @@ void alloc_block(arena_t *arena, const uint64_t address, const uint64_t size)
 	}
 	// Block Allocation and merging
 	block_t *bl = calloc(1, sizeof(block_t));
+	DIE(!bl, "calloc() for block failed");
 	bl->start_address = address;
 	bl->size = size;
 	// Merging to the left side of the block
@@ -217,9 +218,11 @@ void alloc_block(arena_t *arena, const uint64_t address, const uint64_t size)
 	}
 	// We also add our new miniblock inbetween(address TO address_end)
 	miniblock_t *minitmp = calloc(1, sizeof(miniblock_t));
+	DIE(!minitmp, "calloc() for miniblock failed");
 	minitmp->start_address = address;
 	minitmp->size = size;
 	minitmp->rw_buffer = calloc(size, sizeof(int8_t));
+	DIE(!minitmp->rw_buffer, "calloc() for rw_buffer failed");
 	minitmp->perm = 0; // 0 = RW-
 	dll_add_nth_node(minib_l, i, minitmp);
 	free(minitmp);
@@ -238,6 +241,7 @@ void alloc_block(arena_t *arena, const uint64_t address, const uint64_t size)
 	}
 	// Node insertion, freeing and removing
 	dll_node_t *f_node = calloc(1, sizeof(dll_node_t));
+	DIE(!f_node, "calloc() for dll_node failed");
 	f_node->data = bl;
 	if (merger_end) {
 		if (merger_end_node == arena->alloc_list->head)
@@ -345,9 +349,11 @@ void free_block(arena_t *arena, const uint64_t address)
 			}
 			miniblock_t *start_miniblock = mini_list->head->data;
 			block_t *new_block = malloc(sizeof(block_t));
+			DIE(!new_block, "malloc() for new block failed");
 			new_block->start_address = start_miniblock->start_address;
 			new_block->size = 0;
 			new_block->miniblock_list = malloc(sizeof(dll_list_t));
+			DIE(!new_block->miniblock_list, "malloc() failed");
 			dll_list_t *newl_mini = new_block->miniblock_list;
 			newl_mini->head = NULL;
 			newl_mini->size = 0;
@@ -361,6 +367,7 @@ void free_block(arena_t *arena, const uint64_t address)
 				free(transfer);
 			} // We add the new block to the list
 			dll_node_t *new_block_node = malloc(sizeof(dll_node_t));
+			DIE(!new_block_node, "malloc() for new block node failed");
 			new_block_node->data = new_block;
 			new_block_node->next = b_node;
 			new_block_node->prev = b_node->prev;
