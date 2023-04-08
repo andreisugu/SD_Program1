@@ -129,8 +129,7 @@ void dealloc_arena(arena_t *arena)
 			dll_node_t *miniblock_node = dll_remove_nth_node(minilist, 0);
 			// We free the miniblock's data
 			miniblock_t *miniblock = miniblock_node->data;
-			if (miniblock->rw_buffer)
-				free(miniblock->rw_buffer);
+			free(miniblock->rw_buffer);
 			free(miniblock_node->data);
 			free(miniblock_node);
 		}
@@ -220,6 +219,7 @@ void alloc_block(arena_t *arena, const uint64_t address, const uint64_t size)
 	miniblock_t *minitmp = calloc(1, sizeof(miniblock_t));
 	minitmp->start_address = address;
 	minitmp->size = size;
+	minitmp->rw_buffer = calloc(size, sizeof(int8_t));
 	minitmp->perm = 0; // 0 = RW-
 	dll_add_nth_node(minib_l, i, minitmp);
 	free(minitmp);
@@ -305,9 +305,8 @@ void free_block(arena_t *arena, const uint64_t address)
 		for (; j < mini_list->size; j++, m_node = m_node->next) {
 			miniblock_t *minib = m_node->data;
 			if (minib->start_address != address)
-				continue;
-			if (minib->rw_buffer) // We remove the miniblocks content
-				free(minib->rw_buffer);
+				continue; // We remove the miniblocks content
+			free(minib->rw_buffer);
 			int pos = 2; // 0 = beggining, 1 = end, 2 = inside
 			if (m_node == mini_list->head)
 				pos = 0;
@@ -378,6 +377,96 @@ void free_block(arena_t *arena, const uint64_t address)
 		break;
 	}
 	printf("Invalid address for free.\n");
+}
+
+void read(arena_t *arena, uint64_t address, uint64_t size) {
+	// First we have to find the block in which the address is
+	dll_list_t *blocks = arena->alloc_list;
+	dll_node_t *b_node = blocks->head;
+	for (unsigned int i = 0; i < blocks->size; i++, b_node = b_node->next) {
+		block_t *block = b_node->data;
+		if (address < block->start_address)
+			continue;
+		if (address > block->start_address + block->size)
+			break;
+		// If we got here it means we have found the right block
+		uint64_t end_address = address + size;
+		unsigned int characters_read = (unsigned int)size;
+		if(address + size > block->start_address + block->size) {
+			end_address = block->start_address + block->size;
+			characters_read -= (unsigned int)(address + size - end_address);
+			printf("Warning: size was bigger than the block size. ");
+			printf("Reading %u characters.\n", characters_read);
+		}
+		// We remember how many characters we have to read
+		uint64_t size_left = 0;
+		// We get the miniblocks list and find the first one to read
+		dll_list_t *mini_list = block->miniblock_list;
+		dll_node_t *m_node = mini_list->head;
+		for (unsigned int j = 0; j < mini_list->size; j++, m_node = m_node->next) {
+			miniblock_t *minib = m_node->data;
+			if (address < minib->start_address)
+				if(address + size < minib->start_address + minib->size)
+					continue;
+			// We have found the first miniblock we can read
+			uint64_t diff = address - minib->start_address;
+			if(address < minib->start_address)
+				diff = 0;
+			uint64_t i = diff;
+			int8_t *buffer = (int8_t*)minib->rw_buffer;
+			for(; size_left < size && i < minib->size; i++, size_left++)
+				printf("%c", buffer[i]);
+		}
+		printf("\n");
+		return;
+	}
+	// If we got here it means there is no block with that address
+	printf("Invalid address for read.\n");
+}
+
+void write
+(arena_t *arena, const uint64_t address, const uint64_t size, int8_t *data) {
+	// First we have to find the block in which the address is
+	dll_list_t *blocks = arena->alloc_list;
+	dll_node_t *b_node = blocks->head;
+	for (unsigned int i = 0; i < blocks->size; i++, b_node = b_node->next) {
+		block_t *block = b_node->data;
+		if (address < block->start_address)
+			continue;
+		if (address > block->start_address + block->size)
+			continue;
+		// If we got here it means we have found the right block
+		uint64_t end_address = address + size;
+		unsigned int characters_write = (unsigned int)size;
+		if(address + size > block->start_address + block->size) {
+			end_address = block->start_address + block->size;
+			characters_write -= (unsigned int)(address + size - end_address);
+			printf("Warning: size was bigger than the block size. ");
+			printf("Writing %u characters.\n", characters_write);
+		}
+		// We remember how many characters we have to write
+		uint64_t size_left = 0;
+		// We get the miniblocks list and find the first one to read
+		dll_list_t *mini_list = block->miniblock_list;
+		dll_node_t *m_node = mini_list->head;
+		for (unsigned int j = 0; j < mini_list->size; j++, m_node = m_node->next) {
+			miniblock_t *minib = m_node->data;
+			if (address < minib->start_address)
+				if(address + size < minib->start_address + minib->size)
+					continue;
+			// We have found the first miniblock we can read
+			uint64_t diff = address - minib->start_address;
+			if(address < minib->start_address)
+				diff = 0;
+			uint64_t i = diff;
+			int8_t *buffer = (int8_t*)minib->rw_buffer;
+			for(; size_left < size && i < minib->size; i++, size_left++)
+				buffer[i] = data[size_left];
+		}
+		return;
+	}
+	// If we got here it means there is no block with that address
+	printf("Invalid address for write.\n");
 }
 
 void pmap(const arena_t *arena)

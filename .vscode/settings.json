@@ -3,6 +3,7 @@
         "stddef.h": "c",
         "inttypes.h": "c",
         "vma.h": "c",
-        "string.h": "c"
+        "string.h": "c",
+        "stdio.h": "c"
     }
 }

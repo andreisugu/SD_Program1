@@ -1,10 +1,9 @@
 #include "vma.h"
-#define MAX_STR 256
+#define MAX_STR 1024
 
 int main(void)
 {
 	arena_t *arena_main = NULL;
-	// TODO: The input has to be redone with strtok
 	while (1 == 1) {
 		char comanda[MAX_STR], delim[] = " ";
 		fgets(comanda, MAX_STR, stdin);
@@ -79,11 +78,11 @@ int main(void)
 			// STRTOK CHECK
 			tok = strtok(NULL, delim);
 			if (tok) {
-				printf("Invalid command. Please try again.\n");
+				errorer(3, tok, delim);
 				break;
 			}
 			if (arena_main)
-				read(arena_main, (uint64_t)adresa, (uint64_t)marime);
+				read(arena_main, adresa, marime);
 			else
 				printf("Invalid command. Please try again.");
 			continue;
@@ -95,20 +94,29 @@ int main(void)
 			adresa = (uint64_t)strtol(tok, NULL, 10);
 			tok = strtok(NULL, delim);
 			marime = (uint64_t)strtol(tok, NULL, 10);
-			tok = strtok(NULL, delim);
-			data = calloc(strlen(tok) + 1, sizeof(int8_t));
-			strcpy((char *)data, tok);
-			tok = strtok(NULL, delim);
-			// STRTOK CHECK
-			if (tok) {
+			tok = strtok(NULL, "\n");
+			data = calloc(MAX_STR, sizeof(int8_t));
+			if (tok)
+				strcpy((char *)data, tok);
+			while (strlen((char *)data) < marime - 1) {
+				strcat((char *)data, "\n");
+				fgets(comanda, MAX_STR, stdin);
+				tok = strtok(comanda, "\n");
+				if (tok)
+					strcat((char *)data, tok);
+			}
+			if (strlen((char *)data) > marime) {
+				tok = strtok((char *)data, delim);
+				errorer(3, tok, delim);
 				free(data);
-				errorer(4, tok, delim);
+				continue;
 			} else {
 				if (!arena_main) {
 					printf("Invalid command. Please try again.");
 					continue;
 				}
 				write(arena_main, adresa, marime, data);
+				free(data);
 			}
 			continue;
 		}
